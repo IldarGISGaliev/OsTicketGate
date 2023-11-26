@@ -22,17 +22,25 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 # Определим состояния разговора
-EMAIL, MESSAGE, FILE = range(3)
+EMAIL, COUNTRY, MESSAGE, FILE = range(4)
 
 # Функция для обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-   await update.message.reply_text('Привет! Пожалуйста, отправьте мне свой email.',reply_markup=ReplyKeyboardRemove())
+   await update.message.reply_text('Привет! Здесь можно подать жалобу, если вы считаете, что подверглись дискриминации по причине вашего гражданства или узнать какие-то полезные факты. Мы свяжемся с вами для уточнения деталей и вместе подумаем, что можно сделать.Перед подачей жалобы, ознакомьтесь с базой знания (http://34.34.22.214/upload/index.php), возможно ваш случай уже имеет готовое решение. Введите в поиск название учреждения (банк, авикомпания и т.д) или страну и проверьте результаты.',reply_markup=ReplyKeyboardRemove())
+   await update.message.reply_text('Для начала работы отправьте мне свой email.')
    return EMAIL
 
 # Функция для обработки полученного email
 async def get_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     email = update.message.text
     context.user_data['email'] = email
+    await update.message.reply_text(f'Спасибо! В какой стране вы столкнулись с ограничениями?')
+    return COUNTRY
+
+# Функция для обработки Страны
+async def get_country(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    country = update.message.text
+    context.user_data['country'] = country
     await update.message.reply_text(f'Спасибо! С какими ограничениями вы столкнулись?')
     return MESSAGE
 
@@ -58,9 +66,9 @@ async def skip_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     'name': user.full_name,
     'email': context.user_data['email'],
     'phone': user.id,
-    'subject': 'Ticket from TG gate',
+    'subject': context.user_data['country']+ user.name,
     'ip': '123.211.233.122',
-    'message': context.user_data['message']
+    'message': 'Страна:' + context.user_data['country'] +'\n\n'+context.user_data['message']
     }
     headers = {
         'Content-Type': 'application/json',
@@ -109,9 +117,9 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     'name': user.full_name,
     'email': context.user_data['email'],
     'phone': user.id,
-    'subject': 'Ticket from TG gate',
+    'subject': context.user_data['country']+ user.name,
     'ip': '123.211.233.122',
-    'message': context.user_data['message'],
+    'message': 'Страна:' + context.user_data['country'] +'\n\n'+context.user_data['message'],
     'attachments': [
         {DataName: DataOPrefix+file64
          }
@@ -150,6 +158,7 @@ def main():
         entry_points=[CommandHandler('start', start)],
         states={
             EMAIL: [MessageHandler(filters.TEXT & ~filters.Command(), get_email)],
+            COUNTRY: [MessageHandler(filters.TEXT & ~filters.Command(), get_country)],
             MESSAGE: [MessageHandler(filters.TEXT & ~filters.Command(), get_message)],
             FILE: [MessageHandler(filters.ATTACHMENT | filters.PHOTO, get_file),CommandHandler("skip", skip_file)]
         },
