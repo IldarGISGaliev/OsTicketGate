@@ -25,22 +25,55 @@ EMAIL, MESSAGE, FILE = range(3)
 
 # Функция для обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-   await update.message.reply_text('Привет! Пожалуйста, отправь мне свой email.')
+   await update.message.reply_text('Привет! Пожалуйста, отправьте мне свой email.')
    return EMAIL
 
 # Функция для обработки полученного email
 async def get_email(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     email = update.message.text
     context.user_data['email'] = email
-    await update.message.reply_text(f'Спасибо! Теперь напиши мне своё сообщение.')
+    await update.message.reply_text(f'Спасибо! С какими ограничениями вы столкнулись?')
     return MESSAGE
 
 # Функция для обработки сообщения
 async def get_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     message = update.message.text
     context.user_data['message'] = message
-    await update.message.reply_text(f'Теперь прикрепи файл (картинку или PDF). Он должен быть меньше 2 МБ.')
+    await update.message.reply_text(f'Если есть официальный отказ прикрепи файл (картинку или PDF). Он должен быть меньше 2 МБ. Или напиши /skip')
     return FILE
+
+# Пропускаем обработку фото
+async def skip_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+     # URL и заголовки для POST запроса
+    config = configparser.ConfigParser()
+    config.read('secrets.ini')
+    xapitoken = config['OSTicket']['xapitoken']
+    url = config['OSTicket']['path ']
+    user = update.message.from_user
+    data = {
+        'alert': True,
+        'autorespond': True,
+    'source': 'API',
+    'name': user.full_name,
+    'email': context.user_data['email'],
+    'phone': user.id,
+    'subject': 'Ticket from TG gate',
+    'ip': '123.211.233.122',
+    'message': 'data:text/html,MESSAGE <b>'+context.user_data['message']+'</b>'
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'X-API-Key': xapitoken
+    }
+
+    # Выполнение POST запроса
+    try:
+        response = requests.post(url, json=data, headers=headers)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logger.info("Error while creating new ticket %s ", e)
+    await update.message.reply_text('Данные отправлены, проверьте почту для отслеживания обновлений!') 
+    return ConversationHandler.END
 
 # Функция для обработки прикрепленного файла
 async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -58,6 +91,35 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
     context.user_data['file'] = file
     await update.message.reply_text('Файл получен!')
+    # URL и заголовки для POST запроса
+    config = configparser.ConfigParser()
+    config.read('secrets.ini')
+    xapitoken = config['OSTicket']['xapitoken']
+    url = config['OSTicket']['path ']
+    user = update.message.from_user
+    data = {
+        'alert': True,
+        'autorespond': True,
+    'source': 'API',
+    'name': user.full_name,
+    'email': context.user_data['email'],
+    'phone': user.id,
+    'subject': 'Ticket from TG gate',
+    'ip': '123.211.233.122',
+    'message': 'data:text/html,MESSAGE <b>'+context.user_data['message']+'</b>'
+    }
+    headers = {
+        'Content-Type': 'application/json',
+        'X-API-Key': xapitoken
+    }
+
+    # Выполнение POST запроса
+    try:
+        response = requests.post(url, json=data, headers=headers)
+        response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        logger.info("Error while creating new ticket %s ", e)
+    await update.message.reply_text('Данные отправлены, проверьте почту для отслеживания обновлений!')    
     return ConversationHandler.END
 
 # Функция для выхода из разговора
@@ -80,7 +142,7 @@ def main():
         states={
             EMAIL: [MessageHandler(filters.TEXT & ~filters.Command(), get_email)],
             MESSAGE: [MessageHandler(filters.TEXT & ~filters.Command(), get_message)],
-            FILE: [MessageHandler(filters.ATTACHMENT | filters.PHOTO, get_file)]
+            FILE: [MessageHandler(filters.ATTACHMENT | filters.PHOTO, get_file),CommandHandler("skip", skip_file)]
         },
         fallbacks=[CommandHandler('cancel', cancel)]
     )
