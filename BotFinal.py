@@ -1,7 +1,8 @@
 import logging
 import configparser
 import requests
-from telegram import Update
+import base64
+from telegram import ReplyKeyboardMarkup, ReplyKeyboardRemove, Update
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -25,7 +26,7 @@ EMAIL, MESSAGE, FILE = range(3)
 
 # Функция для обработки команды /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-   await update.message.reply_text('Привет! Пожалуйста, отправьте мне свой email.')
+   await update.message.reply_text('Привет! Пожалуйста, отправьте мне свой email.',reply_markup=ReplyKeyboardRemove())
    return EMAIL
 
 # Функция для обработки полученного email
@@ -48,7 +49,7 @@ async def skip_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     config = configparser.ConfigParser()
     config.read('secrets.ini')
     xapitoken = config['OSTicket']['xapitoken']
-    url = config['OSTicket']['path ']
+    url = config['OSTicket']['path']
     user = update.message.from_user
     data = {
         'alert': True,
@@ -59,7 +60,7 @@ async def skip_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     'phone': user.id,
     'subject': 'Ticket from TG gate',
     'ip': '123.211.233.122',
-    'message': 'data:text/html,MESSAGE <b>'+context.user_data['message']+'</b>'
+    'message': context.user_data['message']
     }
     headers = {
         'Content-Type': 'application/json',
@@ -83,19 +84,23 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if file_size > 2 * 1024 * 1024:
         await update.message.reply_text('Файл слишком большой. Пожалуйста, отправь файл размером меньше 2 МБ.')
         return FILE
-
-    file_extension = file.file_name.split('.')[-1].lower()
-    if file_extension not in ['jpg', 'jpeg', 'png', 'pdf']:
-        await update.message.reply_text('Неверный формат файла. Пожалуйста, отправь картинку или PDF.')
-        return FILE
-
-    context.user_data['file'] = file
+    if update.message.document is None:
+        fileContent = await update.message.photo[-1].get_file()  
+        DataOPrefix='data:image/png;base64,'
+        DataName='Image.png'
+    else:
+        fileContent = await update.message.document.get_file()
+        DataOPrefix='data:application/pdf;base64,'
+        DataName='Doc.pdf'
+    fileByteCor=await fileContent.download_as_bytearray()   
+    fileByte = bytes(fileByteCor)
+    file64= base64.b64encode(fileByte).decode('utf-8') 
     await update.message.reply_text('Файл получен!')
     # URL и заголовки для POST запроса
     config = configparser.ConfigParser()
     config.read('secrets.ini')
     xapitoken = config['OSTicket']['xapitoken']
-    url = config['OSTicket']['path ']
+    url = config['OSTicket']['path']
     user = update.message.from_user
     data = {
         'alert': True,
@@ -106,7 +111,11 @@ async def get_file(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     'phone': user.id,
     'subject': 'Ticket from TG gate',
     'ip': '123.211.233.122',
-    'message': 'data:text/html,MESSAGE <b>'+context.user_data['message']+'</b>'
+    'message': context.user_data['message'],
+    'attachments': [
+        {DataName: DataOPrefix+file64
+         }
+         ]
     }
     headers = {
         'Content-Type': 'application/json',
